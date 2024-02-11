@@ -30,6 +30,7 @@ fn run_with_repo(config: &Config, repo: &git2::Repository) -> Result<()> {
         crit!(config.logger, "No commits available to fix up, exiting");
         return Ok(());
     }
+    let last_commit_in_stack = stack.last().unwrap().clone();
 
     let mut we_added_everything_to_index = false;
     if nothing_left_in_index(repo)? {
@@ -98,7 +99,6 @@ fn run_with_repo(config: &Config, repo: &git2::Repository) -> Result<()> {
 
     let mut hunks_with_commit = vec![];
 
-    let mut patches_considered = 0usize;
     'patch: for index_patch in index.iter() {
         let old_path = index_patch.new_path.as_slice();
         if index_patch.status != git2::Delta::Modified {
@@ -108,8 +108,6 @@ fn run_with_repo(config: &Config, repo: &git2::Repository) -> Result<()> {
             );
             continue 'patch;
         }
-
-        patches_considered += 1;
 
         let mut preceding_hunks_offset = 0isize;
         let mut applied_hunks_offset = 0isize;
@@ -255,6 +253,17 @@ fn run_with_repo(config: &Config, repo: &git2::Repository) -> Result<()> {
         }
     }
 
+    // TODO: check additionally if any of the old fixup commits
+    // will be able to reach their targets,
+    // because otherwise, if there's 0 new fixups, the rebase relies on the old fixups,
+    // but they won't be able to reach their targets, so rebase will be meaningless.
+    //
+    // and, if some fixup commits cannot reach their target,
+    // then is it possible to extend the base so that they could & would?
+    //
+    let any_old_fixups: bool = summary_counts.keys().any(|x| x.starts_with("fixup! "));
+    let mut any_new_fixups: bool = false;
+
     hunks_with_commit.sort_by_key(|h| h.dest_commit.id());
     // * apply all hunks that are going to be fixed up into `dest_commit`
     // * commit the fixup
@@ -280,6 +289,8 @@ fn run_with_repo(config: &Config, repo: &git2::Repository) -> Result<()> {
             !config.one_fixup_per_commit || next.dest_commit.id() != current.dest_commit.id()
         });
         if commit_fixup {
+            any_new_fixups = true;
+
             // TODO: the git2 api only supports utf8 commit messages,
             // so it's okay to use strings instead of bytes here
             // https://docs.rs/git2/0.7.5/src/git2/repo.rs.html#998
@@ -328,15 +339,36 @@ fn run_with_repo(config: &Config, repo: &git2::Repository) -> Result<()> {
         index.write()?;
     }
 
-    if patches_considered == 0 {
+    if !any_new_fixups && !config.and_rebase {
+        // if did not find anything new, and will not rebase,
+        // then we accomplished nothing.
         warn!(
             config.logger,
-            "No additions staged, try adding something to the index."
+            "Could not absorb anything - \
+             try increasing the search range with --base \
+             or staging more changes."
         );
-    } else if config.and_rebase {
+    }
+
+    if config.and_rebase {
         use std::process::Command;
-        // unwrap() is safe here, as we exit early if the stack is empty
-        let last_commit_in_stack = &stack.last().unwrap().0;
+
+        if !any_old_fixups || any_new_fixups {
+            warn!(
+                config.logger,
+                "rebase: 0 fixup commits found - nothing to do."
+            );
+
+            return Ok(());
+        }
+
+        if !any_new_fixups {
+            info!(
+                config.logger,
+                "0 new fixups, will only rebase existing ones."
+            );
+        }
+
         // The stack isn't supposed to have any merge commits, per the check in working_stack()
         let number_of_parents = last_commit_in_stack.parents().len();
         assert!(number_of_parents <= 1);

@@ -83,6 +83,9 @@ fn run_with_repo(config: &Config, repo: &git2::Repository) -> Result<()> {
     };
 
     let mut head_tree = repo.head()?.peel_to_tree()?;
+    // has old diffs: we can re-apply once done to bring back staging into where it was.
+    // just need to get these diffs before `git add .` if `--all` is specified.
+    // if --all is not specified, then this is irrelevant anyway
     let index = owned::Diff::new(&repo.diff_tree_to_index(
         Some(&head_tree),
         None,

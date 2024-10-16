@@ -34,6 +34,12 @@ struct Cli {
     /// Only generate one fixup per commit
     #[clap(long, short = 'F')]
     one_fixup_per_commit: bool,
+	/// override config or previous --no-autostage
+    #[clap(long, short = 'u')]
+	autostage: bool,
+	/// override config or previous --autostage
+    #[clap(long, short = 'U')]
+	no_autostage: bool,
 }
 
 fn main() {
@@ -46,7 +52,13 @@ fn main() {
         gen_completions,
         whole_file,
         one_fixup_per_commit,
+		autostage,
+		no_autostage,
     } = Cli::parse();
+
+	Cli::
+
+	clap::Arg::get_index()
 
     if let Some(shell) = gen_completions {
         let app_name = "git-absorb";

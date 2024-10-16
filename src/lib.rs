@@ -16,6 +16,7 @@ pub struct Config<'a> {
     pub and_rebase: bool,
     pub whole_file: bool,
     pub one_fixup_per_commit: bool,
+	pub autostage: bool,
     pub logger: &'a slog::Logger,
 }
 

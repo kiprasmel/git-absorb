@@ -40,6 +40,11 @@ pub fn auto_stage_if_nothing_staged(repo: &git2::Repository) -> bool {
     }
 }
 
+pub fn resolve_autostage_opt(repo: &git2::Repository, opt_autostage: bool, opt_no_autostage: bool) -> bool {
+	let default = auto_stage_if_nothing_staged(repo);
+	
+}
+
 pub fn fixup_target_always_sha(repo: &git2::Repository) -> bool {
     match repo
         .config()
